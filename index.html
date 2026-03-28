@@ -430,25 +430,22 @@
       <h3>How to use it</h3>
       <div class="step">
         <span class="step-num">1</span>
-        <span>Sign up at <a href="https://portal.nousresearch.com" target="_blank" style="color:#06B6D4">portal.nousresearch.com</a></span>
+        <span>Install Hermes Agent:</span>
+      </div>
+      <div style="background:rgba(15,15,26,0.6); border-radius:8px; padding:0.75rem; margin: 0.25rem 0 0.5rem 2.15rem; font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#06B6D4; line-height:1.8; text-align:left;">
+        curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
       </div>
       <div class="step">
         <span class="step-num">2</span>
-        <span>Go to <strong>Credits</strong> and enter your code</span>
+        <span>Run <code>hermes model</code> → Select <strong>Nous Portal</strong> → Log in via browser → Pick a model</span>
       </div>
       <div class="step">
         <span class="step-num">3</span>
-        <span>Copy your <strong>API key</strong> from the API Keys page</span>
+        <span>Go to <a href="https://portal.nousresearch.com" target="_blank" style="color:#06B6D4">portal.nousresearch.com</a> → <strong>Billing</strong> → Subscribe to the matching plan ($20 or $50)</span>
       </div>
       <div class="step">
         <span class="step-num">4</span>
-        <span>Configure Hermes Agent:</span>
-      </div>
-      <div style="background:rgba(15,15,26,0.6); border-radius:8px; padding:0.75rem; margin: 0.25rem 0 0.5rem 2.15rem; font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#06B6D4; line-height:1.8; text-align:left;">
-        hermes config set provider custom<br>
-        hermes config set base_url https://inference-api.nousresearch.com/v1<br>
-        hermes config set api_key <span style="color:#F59E0B">YOUR_KEY</span><br>
-        hermes config set model anthropic/claude-sonnet-4
+        <span>At Stripe checkout, click <strong style="color:#F59E0B">"Add code"</strong> (top on mobile, left on desktop) and enter your code — it makes the subscription free!</span>
       </div>
       <div class="step">
         <span class="step-num">5</span>
