@@ -467,7 +467,33 @@
 
 <script>
 // ═══════════════════════════════════════════════════════
-// CODE DATABASE — All codes stored client-side
+// SECURITY NOTICE — READ BEFORE REUSING THIS PAGE
+// ═══════════════════════════════════════════════════════
+//
+// This page is a static, backend-free giveaway front-end. Two consequences
+// follow from that design, and neither can be fixed from inside this file:
+//
+//   1. Every promo code is part of the page source. Anything the browser can
+//      execute, the visitor can read: "View Source", DevTools, or a plain
+//      `curl` of this URL yields the complete list of codes for both tiers,
+//      claimed or not. The reveal animation and the "SOLD OUT" labels are
+//      presentation, not access control.
+//
+//   2. The one-code-per-person rule is enforced only by a localStorage entry
+//      on the visitor's own machine. A private window, another browser, another
+//      device, or `localStorage.clear()` resets it. The device id below is not
+//      an identity: the client both generates it and decides whether to send
+//      it.
+//
+// If the codes have real monetary value, this page must not be the thing that
+// holds them. The codes belong in a server-side store that hands out exactly
+// one per authenticated or rate-limited request, and this page should call that
+// endpoint instead of shipping the inventory to the client. The changes below
+// fix the defects that *are* fixable here (HTML injection, weak randomness);
+// they deliberately do not pretend to solve the two points above.
+//
+// ═══════════════════════════════════════════════════════
+// CODE DATABASE — All codes stored client-side (see notice above)
 // State tracked via localStorage (key: nous-yhack-codes)
 // ═══════════════════════════════════════════════════════
 
@@ -528,9 +554,18 @@ function updateUI() {
   const state = getState();
   const userClaim = state.log.find(e => e.device === getDeviceId());
   if (userClaim) {
-    document.getElementById("already-claimed").style.display = "block";
-    document.getElementById("already-claimed").innerHTML =
-      `You already claimed a code: <strong>${userClaim.code}</strong> ($${userClaim.tier}).<br>Look above if you need it again!`;
+    // Built with DOM nodes rather than innerHTML. The values come from
+    // localStorage, which the visitor controls, so string-interpolating them
+    // into markup would let stored data become executable markup on reload.
+    const banner = document.getElementById("already-claimed");
+    banner.style.display = "block";
+    banner.textContent = "You already claimed a code: ";
+    const strong = document.createElement("strong");
+    strong.textContent = String(userClaim.code);
+    banner.appendChild(strong);
+    banner.appendChild(document.createTextNode(` ($${String(userClaim.tier)}).`));
+    banner.appendChild(document.createElement("br"));
+    banner.appendChild(document.createTextNode("Look above if you need it again!"));
     showCode(userClaim.code, userClaim.tier);
   }
 }
@@ -548,7 +583,17 @@ function selectTier(tier) {
 function getDeviceId() {
   let id = localStorage.getItem("nous-yhack-device");
   if (!id) {
-    id = "dev_" + Math.random().toString(36).substr(2, 12) + Date.now().toString(36);
+    // Math.random() is not a source of unique or unguessable values: it is seeded
+    // per browsing context and its output is short enough that collisions between
+    // two visitors on the same day are realistic, which would make one of them
+    // inherit the other's claim record. crypto.getRandomValues() is the platform
+    // CSPRNG and is available in every browser that supports the rest of this
+    // page. (This makes the id collision-resistant and unpredictable; it does
+    // not make the one-claim-per-person rule enforceable — see the notice at the
+    // top of this script.)
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    id = "dev_" + Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
     localStorage.setItem("nous-yhack-device", id);
   }
   return id;
@@ -624,24 +669,74 @@ function toggleAdmin() {
 
 function renderAdmin() {
   const state = getState();
-  let html = "<h4>Code Status</h4>";
+  const panel = document.getElementById("admin-panel");
+
+  // Rebuilt with DOM APIs instead of string-concatenated innerHTML. `entry.name`
+  // is visitor-supplied text: with innerHTML, a name such as
+  // `<img src=x onerror=...>` was persisted to localStorage by the claim flow
+  // and then re-parsed as live markup every time this panel was opened. Passing
+  // the value through textContent / createTextNode makes it data permanently —
+  // there is no escaping step left that a future edit could forget.
+  panel.replaceChildren();
+
+  const heading = document.createElement("h4");
+  heading.textContent = "Code Status";
+  panel.appendChild(heading);
 
   for (const tier of ["50", "20"]) {
-    html += `<div style="margin:0.5rem 0"><strong>$${tier} Codes</strong></div>`;
+    const tierRow = document.createElement("div");
+    tierRow.style.margin = "0.5rem 0";
+    const tierLabel = document.createElement("strong");
+    tierLabel.textContent = `$${tier} Codes`;
+    tierRow.appendChild(tierLabel);
+    panel.appendChild(tierRow);
+
     for (const code of CODES[tier]) {
       const entry = state.log.find(e => e.code === code);
-      if (entry) {
-        html += `<div class="admin-entry"><span class="claimed">✗</span> ${code} → ${entry.name} (${new Date(entry.time).toLocaleTimeString()})</div>`;
-      } else {
-        html += `<div class="admin-entry"><span class="available">✓</span> ${code} — available</div>`;
-      }
+      const row = document.createElement("div");
+      row.className = "admin-entry";
+      const mark = document.createElement("span");
+      mark.className = entry ? "claimed" : "available";
+      mark.textContent = entry ? "✗" : "✓";
+      row.appendChild(mark);
+      row.appendChild(document.createTextNode(
+        entry
+          ? ` ${code} → ${entry.name} (${new Date(entry.time).toLocaleTimeString()})`
+          : ` ${code} — available`
+      ));
+      panel.appendChild(row);
     }
   }
 
-  html += `<div style="margin-top:0.75rem"><strong>Total claimed:</strong> ${state.log.length}/${CODES["50"].length + CODES["20"].length}</div>`;
-  html += `<div><button onclick="if(confirm('Reset all claims?')){localStorage.removeItem('${STORAGE_KEY}');localStorage.removeItem('nous-yhack-device');location.reload()}" style="margin-top:0.5rem;padding:0.3rem 0.8rem;background:#EF4444;color:white;border:none;border-radius:4px;cursor:pointer;font-size:0.7rem">Reset All</button></div>`;
+  const total = document.createElement("div");
+  total.style.marginTop = "0.75rem";
+  const totalLabel = document.createElement("strong");
+  totalLabel.textContent = "Total claimed:";
+  total.appendChild(totalLabel);
+  total.appendChild(document.createTextNode(
+    ` ${state.log.length}/${CODES["50"].length + CODES["20"].length}`
+  ));
+  panel.appendChild(total);
 
-  document.getElementById("admin-panel").innerHTML = html;
+  // The reset button used to be an inline onclick attribute assembled by string
+  // interpolation, so STORAGE_KEY was pasted into an executable context. It is a
+  // real event listener now: nothing this function produces is ever parsed as
+  // code, and the key is referenced as a variable.
+  const resetWrap = document.createElement("div");
+  const resetBtn = document.createElement("button");
+  resetBtn.textContent = "Reset All";
+  resetBtn.style.cssText =
+    "margin-top:0.5rem;padding:0.3rem 0.8rem;background:#EF4444;color:white;" +
+    "border:none;border-radius:4px;cursor:pointer;font-size:0.7rem";
+  resetBtn.addEventListener("click", () => {
+    if (confirm("Reset all claims?")) {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem("nous-yhack-device");
+      location.reload();
+    }
+  });
+  resetWrap.appendChild(resetBtn);
+  panel.appendChild(resetWrap);
 }
 
 // Init
